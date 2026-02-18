@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   const { image } = await req.json();
 
-  // 1. Crea la richiesta all'IA
+  // Iniziamo solo la richiesta, non aspettiamo che finisca qui
   const startRes = await fetch("https://api.replicate.com/v1/predictions", {
     method: "POST",
     headers: {
@@ -17,23 +17,19 @@ export async function POST(req: Request) {
   });
 
   const prediction = await startRes.json();
-  const pollUrl = prediction.urls.get;
+  // Restituiamo al browser l'ID della previsione per farlo controllare a lui
+  return NextResponse.json(prediction);
+}
 
-  // 2. Aspetta che l'IA finisca (Polling)
-  let restoredUrl = null;
-  while (!restoredUrl) {
-    const checkRes = await fetch(pollUrl, {
-      headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` },
-    });
-    const result = await checkRes.json();
-    if (result.status === "succeeded") {
-      restoredUrl = result.output;
-    } else if (result.status === "failed") {
-      return NextResponse.json({ error: "AI Failed" }, { status: 500 });
-    } else {
-      await new Promise((r) => setTimeout(r, 2000)); // Aspetta 2 secondi e riprova
-    }
-  }
+// Nuova funzione per permettere al browser di controllare lo stato
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get("id");
 
-  return NextResponse.json({ output: restoredUrl });
+  const res = await fetch(`https://api.replicate.com/v1/predictions/${id}`, {
+    headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` },
+  });
+  
+  const result = await res.json();
+  return NextResponse.json(result);
 }
