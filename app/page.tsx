@@ -5,6 +5,7 @@ export default function FotoRestorer() {
   const [image, setImage] = useState<string | null>(null);
   const [restoredImage, setRestoredImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   const handleUpload = async (e: any) => {
     const file = e.target.files[0];
@@ -15,49 +16,68 @@ export default function FotoRestorer() {
       setImage(base64data);
       setLoading(true);
       setRestoredImage(null);
+      setStatus("Inviando la foto all'IA...");
 
+      // 1. Inizia il processo
       const response = await fetch("/api/restore", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64data }),
       });
       
-      const data = await response.json();
-      if (data.output) {
-        setRestoredImage(data.output);
-      } else {
-        alert("Errore durante il restauro. Riprova.");
-      }
-      setLoading(false);
+      const prediction = await response.json();
+      const id = prediction.id;
+
+      // 2. Controlla ogni 2 secondi se è pronto
+      const checkStatus = setInterval(async () => {
+        setStatus("L'IA sta lavorando... (può volerci un minuto)");
+        const res = await fetch(`/api/restore?id=${id}`);
+        const result = await res.json();
+
+        if (result.status === "succeeded") {
+          setRestoredImage(result.output);
+          setLoading(false);
+          setStatus("");
+          clearInterval(checkStatus);
+        } else if (result.status === "failed") {
+          alert("Errore IA");
+          setLoading(false);
+          clearInterval(checkStatus);
+        }
+      }, 2000);
     };
     reader.readAsDataURL(file);
   };
 
   return (
-    <div style={{ padding: "40px", fontFamily: "Arial, sans-serif", maxWidth: "800px", margin: "auto", textAlign: "center" }}>
+    <div style={{ padding: "40px", fontFamily: "Arial, sans-serif", maxWidth: "900px", margin: "auto", textAlign: "center" }}>
       <h1 style={{ color: "#333" }}>Restauro Foto AI & HD 📸</h1>
-      <p style={{ color: "#666" }}>Carica una foto rovinata o in bianco e nero per migliorarla</p>
       
       <div style={{ border: "2px dashed #ccc", padding: "20px", borderRadius: "10px", marginBottom: "20px" }}>
         <input type="file" onChange={handleUpload} accept="image/*" />
       </div>
       
-      {loading && <div style={{ fontSize: "18px", fontWeight: "bold", color: "#007bff" }}>⏳ L'IA sta lavorando... attendi circa 20 secondi.</div>}
+      {loading && (
+        <div style={{ margin: "20px", padding: "10px", background: "#e1f5fe", borderRadius: "5px" }}>
+          <p style={{ color: "#0288d1", fontWeight: "bold" }}>⏳ {status}</p>
+        </div>
+      )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         {image && (
           <div>
-            <h3>Originale</h3>
-            <img src={image} style={{ width: "100%", borderRadius: "10px" }} />
+            <h3 style={{ color: "#666" }}>Prima</h3>
+            <img src={image} style={{ width: "100%", borderRadius: "10px", boxShadow: "0 2px 5px rgba(0,0,0,0.1)" }} />
           </div>
         )}
         {restoredImage && (
           <div>
-            <h3>Restaurata HD</h3>
-            <img src={restoredImage} style={{ width: "100%", borderRadius: "10px", border: "3px solid #4CAF50" }} />
-            <a href={restoredImage} download="restored.png" target="_blank">
-              <button style={{ marginTop: "10px", padding: "10px 20px", background: "#4CAF50", color: "white", border: "none", borderRadius: "5px", cursor: "pointer" }}>
-                Scarica Foto HD
+            <h3 style={{ color: "#4CAF50" }}>Dopo (Restaurata)</h3>
+            <img src={restoredImage} style={{ width: "100%", borderRadius: "10px", border: "3px solid #4CAF50", boxShadow: "0 4px 15px rgba(0,0,0,0.2)" }} />
+            <br />
+            <a href={restoredImage} target="_blank" download="foto_restaurata.png">
+              <button style={{ marginTop: "15px", padding: "12px 25px", background: "#4CAF50", color: "white", border: "none", borderRadius: "5px", cursor: "pointer", fontWeight: "bold" }}>
+                ⬇️ SCARICA FOTO HD
               </button>
             </a>
           </div>
